@@ -1,44 +1,12 @@
 import os
-from flask import Flask, request, jsonify, session
+from flask import Flask, request, jsonify
 from openai import OpenAI
 
 app = Flask(__name__)
 app.secret_key = "supersecretkey"
 
-# Inicializar cliente OpenAI
+# Cliente OpenAI
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-
-# --- Base de datos médica básica ---
-symptoms_db = {
-    "cáncer de mama": {
-        "síntomas": [
-            "bulto en el seno o axila",
-            "cambios en la forma del seno",
-            "secreción anormal del pezón",
-            "piel enrojecida o con hoyuelos"
-        ],
-        "mensaje": "El cáncer de mama puede detectarse tempranamente con autoexamen y mamografía."
-    },
-    "cáncer de pulmón": {
-        "síntomas": [
-            "tos persistente o con sangre",
-            "dolor en el pecho",
-            "dificultad para respirar",
-            "pérdida de peso inexplicada"
-        ],
-        "mensaje": "El cáncer de pulmón suele estar asociado al consumo de tabaco, pero también afecta a no fumadores."
-    },
-    "cáncer de colon": {
-        "síntomas": [
-            "cambios en el hábito intestinal",
-            "sangrado rectal",
-            "dolor abdominal persistente",
-            "anemia inexplicada"
-        ],
-        "mensaje": "El cáncer de colon puede prevenirse con chequeos regulares y colonoscopías."
-    }
-}
-
 
 @app.route("/")
 def index():
@@ -47,23 +15,23 @@ def index():
     <html lang="es">
     <head>
         <meta charset="UTF-8">
-        <title>Chatbot Médico con IA</title>
+        <title>Chat Médico Empático</title>
         <style>
             body { font-family: Arial, sans-serif; background: #f4f6f9; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
             .chat-container { width: 500px; background: #fff; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); display: flex; flex-direction: column; overflow: hidden; }
-            .chat-header { background: #6A1B9A; color: #fff; padding: 15px; text-align: center; font-size: 18px; }
+            .chat-header { background: #1565C0; color: #fff; padding: 15px; text-align: center; font-size: 18px; }
             #chat-box { flex: 1; padding: 10px; overflow-y: auto; background: #fafafa; }
-            .user { color: #2196F3; margin: 8px 0; }
-            .bot { color: #6A1B9A; margin: 8px 0; }
+            .user { color: #1E88E5; margin: 8px 0; }
+            .bot { color: #1565C0; margin: 8px 0; }
             .input-container { display: flex; border-top: 1px solid #ddd; }
             input { flex: 1; padding: 10px; border: none; outline: none; }
-            button { padding: 10px 15px; border: none; background: #6A1B9A; color: #fff; cursor: pointer; }
-            button:hover { background: #4A148C; }
+            button { padding: 10px 15px; border: none; background: #1565C0; color: #fff; cursor: pointer; }
+            button:hover { background: #0D47A1; }
         </style>
     </head>
     <body>
         <div class="chat-container">
-            <div class="chat-header">🤖 Chatbot Médico con IA</div>
+            <div class="chat-header">🤖 Asistente Médico Empático</div>
             <div id="chat-box"></div>
             <div class="input-container">
                 <input id="user-input" type="text" placeholder="Escribe tu mensaje...">
@@ -99,38 +67,29 @@ def index():
     </html>
     """
 
-
 @app.route("/chat", methods=["POST"])
 def chat():
-    user_message = request.json.get("message", "").lower()
-    response = ""
+    user_message = request.json.get("message", "")
 
-    # --- Lógica fija de síntomas ---
-    for cancer, data in symptoms_db.items():
-        if cancer in user_message:
-            response = f"El {cancer} puede presentar síntomas como: {', '.join(data['síntomas'])}. {data['mensaje']}"
-            break
-        for s in data["síntomas"]:
-            if s in user_message:
-                response = f"El síntoma '{s}' puede estar relacionado con el {cancer}. {data['mensaje']}"
-                break
+    # Llamada a la IA para dar respuesta empática
+    completion = client.chat.completions.create(
+        model="gpt-4o-mini",  
+        messages=[
+            {"role": "system", "content": (
+                "Eres un asistente médico virtual con un tono empático y humano. "
+                "Tu tarea es conversar de forma calmada y sensible con pacientes que expresan síntomas, dudas o temores. "
+                "Haz preguntas paso a paso para entender mejor la situación, escucha antes de dar información médica. "
+                "Brinda apoyo emocional, reconoce sus sentimientos y explica las cosas con delicadeza. "
+                "Siempre sugiere consultar con un médico real, pero nunca ignores lo que la persona siente."
+            )},
+            {"role": "user", "content": user_message}
+        ]
+    )
 
-    # --- Si no hay respuesta fija, usar IA ---
-    if response == "":
-        completion = client.chat.completions.create(
-            model="gpt-4o-mini",  # puedes cambiar por otro modelo más económico
-            messages=[
-                {"role": "system", "content": "Eres un asistente médico virtual. Orienta sobre síntomas, prevención y hábitos saludables, pero nunca reemplaces al médico."},
-                {"role": "user", "content": user_message}
-            ]
-        )
-        response = completion.choices[0].message.content
-
-    # Descargo de responsabilidad siempre
-    response += "\n\n⚠️ Nota: Esta información es solo orientativa y no reemplaza una consulta médica profesional."
+    response = completion.choices[0].message.content
+    response += "\n\n⚠️ Nota: Esta conversación es orientativa y no reemplaza la atención médica profesional."
 
     return jsonify({"response": response})
-
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
