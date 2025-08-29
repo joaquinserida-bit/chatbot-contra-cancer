@@ -1,8 +1,42 @@
-from flask import Flask, request, jsonify
+import os
+from flask import Flask, request, jsonify, session
 
 app = Flask(__name__)
+app.secret_key = "supersecretkey"  # Necesario para manejar sesión en Flask
 
-# Ruta principal con interfaz web del chatbot
+# --- Base de datos médica básica ---
+symptoms_db = {
+    "cáncer de mama": {
+        "síntomas": [
+            "bulto en el seno o axila",
+            "cambios en la forma del seno",
+            "secreción anormal del pezón",
+            "piel enrojecida o con hoyuelos"
+        ],
+        "mensaje": "El cáncer de mama puede detectarse tempranamente con autoexamen y mamografía."
+    },
+    "cáncer de pulmón": {
+        "síntomas": [
+            "tos persistente o con sangre",
+            "dolor en el pecho",
+            "dificultad para respirar",
+            "pérdida de peso inexplicada"
+        ],
+        "mensaje": "El cáncer de pulmón suele estar asociado al consumo de tabaco, pero también afecta a no fumadores."
+    },
+    "cáncer de colon": {
+        "síntomas": [
+            "cambios en el hábito intestinal",
+            "sangrado rectal",
+            "dolor abdominal persistente",
+            "anemia inexplicada"
+        ],
+        "mensaje": "El cáncer de colon puede prevenirse con chequeos regulares y colonoscopías."
+    }
+}
+
+
+# --- Interfaz Web ---
 @app.route("/")
 def index():
     return """
@@ -22,7 +56,7 @@ def index():
                 margin: 0;
             }
             .chat-container {
-                width: 400px;
+                width: 450px;
                 background: #fff;
                 border-radius: 10px;
                 box-shadow: 0 4px 8px rgba(0,0,0,0.1);
@@ -105,22 +139,48 @@ def index():
     </html>
     """
 
-# API de chatbot
+
+# --- Lógica de conversación ---
 @app.route("/chat", methods=["POST"])
 def chat():
-    data = request.get_json()
-    user_message = data.get("message", "")
+    user_message = request.json.get("message", "").lower()
 
-    # Respuesta básica
-    if "cáncer" in user_message.lower():
-        respuesta = "El cáncer presenta diferentes síntomas según el tipo: fatiga, bultos, pérdida de peso inexplicada, sangrado anormal, entre otros. ¿Quieres que te dé información más detallada de un tipo específico?"
-    else:
-        respuesta = "Soy un asistente médico y puedo orientarte sobre síntomas de cáncer. Por favor, dime qué quieres saber."
+    if "historia" not in session:
+        session["historia"] = []
 
-    return jsonify({"response": respuesta})
+    # Guardar mensajes
+    session["historia"].append({"usuario": user_message})
+
+    response = ""
+
+    # Buscar coincidencias con base de datos
+    for cancer, data in symptoms_db.items():
+        if cancer in user_message:
+            response = f"El {cancer} puede presentar síntomas como: {', '.join(data['síntomas'])}. {data['mensaje']}"
+            break
+        for s in data["síntomas"]:
+            if s in user_message:
+                response = f"El síntoma que mencionas ('{s}') puede estar relacionado con el {cancer}. {data['mensaje']}"
+                break
+
+    # Si no se encontró relación
+    if response == "":
+        if "hola" in user_message:
+            response = "¡Hola! Soy un asistente médico virtual. Puedo orientarte sobre síntomas relacionados con distintos tipos de cáncer. ¿Tienes algún síntoma específico?"
+        elif "gracias" in user_message:
+            response = "Con gusto 😊. Recuerda que esta información es solo orientativa y no reemplaza la atención médica profesional."
+        else:
+            response = "Entiendo lo que dices. ¿Podrías especificar si presentas algún síntoma como dolor, sangrado, bultos, tos persistente, etc.?"
+
+    # Añadir descargo de responsabilidad siempre
+    response += " ⚠️ Esto no sustituye una consulta médica. Te recomiendo visitar a un profesional de la salud."
+
+    session["historia"].append({"bot": response})
+
+    return jsonify({"response": response, "historia": session["historia"]})
 
 
 if __name__ == "__main__":
-    import os
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+
